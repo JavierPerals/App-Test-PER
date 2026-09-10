@@ -74,6 +74,8 @@ final class ResultAnimationView extends FrameLayout {
         webView.getSettings().setBlockNetworkLoads(true);
         webView.setOnTouchListener((v, event) -> true);
         addView(webView, new LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.MATCH_PARENT));
+        webView.loadDataWithBaseURL(null, html, "text/html", "UTF-8", null);
+        active = true;
     }
 
     private void updatePlayback() {

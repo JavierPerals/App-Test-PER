@@ -53,6 +53,14 @@ public class ResultScoreViewTest {
             for (int correct : new int[]{0, 50, 80}) {
                 ResultScoreView header = new ResultScoreView(activity, new TestResult(correct,100), Color.BLUE);
                 activity.setContentView(header);
+                controller.visible();
+                controller.windowFocusChanged(true);
+                // Plain Activity's Robolectric window remains GONE despite visible().
+                // Simulate the window manager's visibility update before testing playback.
+                View decor = activity.getWindow().getDecorView();
+                ReflectionHelpers.setField(ReflectionHelpers.getField(decor, "mAttachInfo"),
+                        "mWindowVisibility", View.VISIBLE);
+                decor.dispatchWindowVisibilityChanged(View.VISIBLE);
                 ResultAnimationView animation = header.findViewWithTag("result_animation");
                     WebView web = ReflectionHelpers.getField(animation, "webView");
                     assertNotNull(web);
@@ -64,7 +72,9 @@ public class ResultScoreViewTest {
                     header.setVisibility(View.GONE);
                     assertFalse((Boolean) ReflectionHelpers.getField(animation, "active"));
                     header.setVisibility(View.VISIBLE);
-                    assertTrue((Boolean) ReflectionHelpers.getField(animation, "active"));
+                    assertTrue("attached=" + animation.isAttachedToWindow() + " shown=" + animation.isShown()
+                            + " window=" + animation.getWindowVisibility(),
+                            (Boolean) ReflectionHelpers.getField(animation, "active"));
                     activity.setContentView(new View(activity));
                     assertNull(ReflectionHelpers.getField(animation, "webView"));
             }
