@@ -65,6 +65,7 @@ public class MainActivity extends Activity {
     private static final String SETTINGS = "per_settings";
     private boolean nightMode;
     private boolean settingsOpen;
+    private LinearLayout settingsDrawer;
     private SharedPreferences settings;
 
     private static final String PREFS = "per_stats";
@@ -181,29 +182,43 @@ public class MainActivity extends Activity {
     }
 
     private void showSettings() {
+        if (settingsDrawer == null || settingsOpen) return;
+        closeDrawer();
         settingsOpen = true;
-        LinearLayout page = new LinearLayout(this);
-        page.setOrientation(LinearLayout.VERTICAL);
-        page.setBackgroundColor(BG);
-        page.setPadding(dp(20), dp(14), dp(20), dp(24));
+        settingsDrawer.animate().cancel();
+        settingsDrawer.setVisibility(View.VISIBLE);
+        scrim.setVisibility(View.VISIBLE);
+        scrim.animate().alpha(1f).setDuration(180).start();
+        settingsDrawer.animate().translationX(0).setDuration(220).start();
+    }
+
+    private void createSettingsDrawer() {
+        settingsDrawer = new LinearLayout(this);
+        settingsDrawer.setTag("settings_drawer");
+        settingsDrawer.setOrientation(LinearLayout.VERTICAL);
+        settingsDrawer.setBackgroundColor(CARD);
+        settingsDrawer.setPadding(dp(20), dp(26), dp(20), dp(20));
+        int width = (int)(getResources().getDisplayMetrics().widthPixels * 0.86f);
+        root.addView(settingsDrawer, new FrameLayout.LayoutParams(width,
+                ViewGroup.LayoutParams.MATCH_PARENT, Gravity.RIGHT));
+        settingsDrawer.setTranslationX(width);
+        settingsDrawer.setVisibility(View.GONE);
         LinearLayout top = new LinearLayout(this);
         top.setGravity(Gravity.CENTER_VERTICAL);
-        Button back = plainButton("‹", BLUE_DARK, Color.TRANSPARENT);
-        back.setContentDescription("Volver al inicio");
-        back.setTextSize(36);
-        back.setOnClickListener(v -> showHome());
-        top.addView(back, new LinearLayout.LayoutParams(dp(56), dp(52)));
-        TextView title = text("Ajustes", 23, TEXT, true);
-        title.setGravity(Gravity.CENTER);
-        top.addView(title, new LinearLayout.LayoutParams(0, dp(52), 1));
-        top.addView(new View(this), new LinearLayout.LayoutParams(dp(56), dp(52)));
-        page.addView(top, matchWrap());
-
-        LinearLayout panel = card();
-        panel.setPadding(dp(18), dp(12), dp(18), dp(12));
-        LinearLayout.LayoutParams panelLp = matchWrap();
-        panelLp.topMargin = dp(18);
-        page.addView(panel, panelLp);
+        top.addView(text("Ajustes", 24, TEXT, true), new LinearLayout.LayoutParams(0, dp(50), 1));
+        Button close = plainButton("×", MUTED, Color.TRANSPARENT);
+        close.setContentDescription("Cerrar ajustes");
+        close.setTag("close_settings");
+        close.setTextSize(28);
+        close.setOnClickListener(v -> closeSettings());
+        top.addView(close, new LinearLayout.LayoutParams(dp(52), dp(50)));
+        settingsDrawer.addView(top, matchWrap());
+        ScrollView scroll = new ScrollView(this);
+        LinearLayout options = new LinearLayout(this);
+        options.setOrientation(LinearLayout.VERTICAL);
+        scroll.addView(options, matchWrap());
+        settingsDrawer.addView(scroll, new LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT, 0, 1));
         Switch toggle = new Switch(this);
         toggle.setTag("night_mode");
         toggle.setText("Modo noche");
@@ -216,15 +231,39 @@ public class MainActivity extends Activity {
             nightMode = checked;
             settings.edit().putBoolean("night_mode", checked).apply();
             applyAppearance();
-            showSettings();
+            showHome();
+            // Repaint the underlying home and both panels without replaying entry.
+            settingsOpen = true;
+            settingsDrawer.setVisibility(View.VISIBLE);
+            settingsDrawer.setTranslationX(0);
+            scrim.setVisibility(View.VISIBLE);
+            scrim.setAlpha(1f);
         });
-        panel.addView(toggle, matchWrap());
-        setContentView(page);
+        options.addView(toggle, matchWrap());
+    }
+
+    private void closeSettings() {
+        if (!settingsOpen) return;
+        settingsOpen = false;
+        settingsDrawer.animate().translationX(settingsDrawer.getLayoutParams().width)
+                .setDuration(200).withEndAction(() -> {
+                    if (!settingsOpen) settingsDrawer.setVisibility(View.GONE);
+                    hideScrimIfClosed();
+                }).start();
+    }
+
+    private void hideScrimIfClosed() {
+        if (!settingsOpen && !drawerOpen) {
+            scrim.animate().cancel();
+            scrim.setVisibility(View.GONE);
+            scrim.setAlpha(0f);
+        }
     }
 
     @Override
     public void onBackPressed() {
-        if (settingsOpen) showHome();
+        if (settingsOpen) closeSettings();
+        else if (drawerOpen) closeDrawer();
         else super.onBackPressed();
     }
 
@@ -251,7 +290,6 @@ public class MainActivity extends Activity {
                 bank.add(new Question(
                         o.getString("id"),
                         o.getString("topic"),
-                        o.getString("difficulty"),
                         o.getString("question"),
                         answers,
                         o.getInt("correct"),
@@ -266,6 +304,7 @@ public class MainActivity extends Activity {
 
     private void showHome() {
         settingsOpen = false;
+        drawerOpen = false;
         stopTimer();
         exam = null;
         root = new FrameLayout(this);
@@ -281,6 +320,8 @@ public class MainActivity extends Activity {
         top.setOrientation(LinearLayout.HORIZONTAL);
         top.setGravity(Gravity.CENTER_VERTICAL);
         Button menu = plainButton("☰", nightMode ? BLUE_DARK : BLUE, Color.TRANSPARENT);
+        menu.setTag("open_stats");
+        menu.setContentDescription("Estadísticas");
         menu.setTextSize(28);
         menu.setMinWidth(dp(52));
         menu.setOnClickListener(v -> openDrawer());
@@ -290,8 +331,12 @@ public class MainActivity extends Activity {
         title.setGravity(Gravity.CENTER);
         LinearLayout.LayoutParams titleLp = new LinearLayout.LayoutParams(0, dp(52), 1);
         top.addView(title, titleLp);
-        View spacer = new View(this);
-        top.addView(spacer, new LinearLayout.LayoutParams(dp(56), dp(52)));
+        Button gear = plainButton("⚙", nightMode ? BLUE_DARK : BLUE, Color.TRANSPARENT);
+        gear.setTextSize(28);
+        gear.setTag("open_settings");
+        gear.setContentDescription("Ajustes");
+        gear.setOnClickListener(v -> showSettings());
+        top.addView(gear, new LinearLayout.LayoutParams(dp(56), dp(52)));
         content.addView(top, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(52)));
 
         TextView subtitle = text("Entrenamiento offline · 1.000 preguntas", 15, MUTED, false);
@@ -316,12 +361,6 @@ public class MainActivity extends Activity {
         mock.setOnClickListener(v -> startMockExam());
         card.addView(mock);
 
-        Button settingsButton = actionButton("Ajustes", BLUE);
-        LinearLayout.LayoutParams settingsLp = buttonLp();
-        settingsLp.topMargin = dp(14);
-        settingsButton.setOnClickListener(v -> showSettings());
-        card.addView(settingsButton, settingsLp);
-
         Button exit = actionButton("Salir", BUTTON_RED);
         LinearLayout.LayoutParams elp = buttonLp();
         elp.topMargin = dp(14);
@@ -336,6 +375,7 @@ public class MainActivity extends Activity {
 
         setContentView(root);
         createDrawer();
+        createSettingsDrawer();
     }
 
     private void showTopicSetup() {
@@ -373,11 +413,6 @@ public class MainActivity extends Activity {
         countSpinner.setSelection(2);
         form.addView(countSpinner, fieldLp());
 
-        form.addView(fieldLabel("Dificultad"));
-        Spinner diffSpinner = spinner(new String[]{"Fácil", "Media", "Difícil", "Mixta"});
-        diffSpinner.setSelection(1);
-        form.addView(diffSpinner, fieldLp());
-
         Button generate = actionButton("Generar test", BLUE);
         LinearLayout.LayoutParams glp = buttonLp();
         glp.topMargin = dp(22);
@@ -385,60 +420,104 @@ public class MainActivity extends Activity {
         generate.setOnClickListener(v -> {
             String t = topicSpinner.getSelectedItem().toString();
             int n = Integer.parseInt(countSpinner.getSelectedItem().toString());
-            String d = diffSpinner.getSelectedItem().toString().toLowerCase(Locale.ROOT);
-            startTopicExam(t, n, d);
+            startTopicExam(t, n);
         });
         form.addView(generate);
         setContentView(page);
     }
 
-    private void startTopicExam(String topic, int n, String difficulty) {
-        List<Question> selected = pickQuestions(topic, n, difficulty);
-        if (selected.isEmpty()) {
-            Toast.makeText(this, "No hay preguntas disponibles", Toast.LENGTH_SHORT).show();
+    private void startTopicExam(String topic, int n) {
+        int maximum = questionsByTag(topic).size();
+        if (n > maximum || n < 1) {
+            new AlertDialog.Builder(this).setTitle("Demasiadas preguntas")
+                    .setMessage("Este tema permite un máximo de " + maximum
+                            + " preguntas/conceptos distintos. Reduce el número de preguntas para generar el test.")
+                    .setPositiveButton("Entendido", null).show();
             return;
         }
-        exam = new Exam(selected, false, topic, difficulty, n);
+        LinkedHashMap<String, Integer> requested = new LinkedHashMap<>();
+        requested.put(topic, n);
+        exam = new Exam(pickQuestions(requested), false, topic, n);
         showExam();
     }
 
     private void startMockExam() {
-        List<Question> selected = new ArrayList<>();
-        for (Map.Entry<String, Integer> e : MOCK_DISTRIBUTION.entrySet()) {
-            selected.addAll(pickQuestions(e.getKey(), e.getValue(), "mixta"));
+        List<Question> selected = pickQuestions(MOCK_DISTRIBUTION);
+        if (selected.size() != 45) {
+            new AlertDialog.Builder(this).setTitle("No se puede generar el simulacro")
+                    .setMessage("No hay conceptos distintos suficientes para la distribución oficial.")
+                    .setPositiveButton("Entendido", null).show();
+            return;
         }
-        exam = new Exam(selected, true, "Simulacro PER", "mixta", 45);
+        exam = new Exam(selected, true, "Simulacro PER", 45);
         showExam();
     }
 
-    private List<Question> pickQuestions(String topic, int n, String difficulty) {
-        List<Question> preferred = new ArrayList<>();
-        List<Question> fallback = new ArrayList<>();
-        Set<String> recent = getRecentIds();
-        for (Question q : bank) {
-            if (!q.topic.equals(topic)) continue;
-            boolean diffOk = difficulty.equals("mixta") || q.difficulty.equals(difficulty);
-            if (diffOk && !recent.contains(q.id)) preferred.add(q);
-            if (diffOk) fallback.add(q);
+    private Map<String, List<Question>> questionsByTag(String topic) {
+        Map<String, List<Question>> groups = new LinkedHashMap<>();
+        for (Question q : bank) if (q.topic.equals(topic))
+            groups.computeIfAbsent(q.tag, key -> new ArrayList<>()).add(q);
+        return groups;
+    }
+
+    private List<Question> pickQuestions(Map<String, Integer> requested) {
+        Map<String, Integer> recentIds = new HashMap<>();
+        int age = 0;
+        for (String id : getRecentIds()) recentIds.put(id, age++);
+        Map<String, Integer> recentTags = new HashMap<>();
+        for (Question q : bank) if (recentIds.containsKey(q.id))
+            recentTags.put(q.tag, Math.max(recentTags.getOrDefault(q.tag, -1), recentIds.get(q.id)));
+
+        List<Map<String, List<Question>>> slots = new ArrayList<>();
+        List<List<String>> choices = new ArrayList<>();
+        for (Map.Entry<String, Integer> entry : requested.entrySet()) {
+            Map<String, List<Question>> groups = questionsByTag(entry.getKey());
+            List<String> tags = new ArrayList<>(groups.keySet());
+            Collections.shuffle(tags, random);
+            tags.sort(Comparator.comparingInt(t -> recentTags.getOrDefault(t, -1)));
+            for (int i = 0; i < entry.getValue(); i++) {
+                slots.add(groups);
+                choices.add(tags);
+            }
         }
-        Collections.shuffle(preferred, random);
-        Collections.shuffle(fallback, random);
-        LinkedHashMap<String, Question> uniq = new LinkedHashMap<>();
-        for (Question q : preferred) uniq.put(q.id, q);
-        for (Question q : fallback) uniq.put(q.id, q);
-        if (uniq.size() < n && !difficulty.equals("mixta")) {
-            List<Question> anyDiff = new ArrayList<>();
-            for (Question q : bank) if (q.topic.equals(topic)) anyDiff.add(q);
-            Collections.shuffle(anyDiff, random);
-            for (Question q : anyDiff) uniq.put(q.id, q);
+        // Match official topic slots to globally unique tags. Reassign a previous
+        // slot when a shared tag is needed by a topic with fewer alternatives.
+        Map<String, Integer> owners = new LinkedHashMap<>();
+        for (int slot = 0; slot < slots.size(); slot++) {
+            if (!assignTag(slot, choices, owners, new LinkedHashSet<>()))
+                return new ArrayList<>();
         }
-        List<Question> out = new ArrayList<>(uniq.values());
-        if (out.size() > n) out = new ArrayList<>(out.subList(0, n));
+        List<Question> out = new ArrayList<>();
+        for (Map.Entry<String, Integer> entry : owners.entrySet()) {
+            List<Question> variants = new ArrayList<>(slots.get(entry.getValue()).get(entry.getKey()));
+            Collections.shuffle(variants, random);
+            variants.sort(Comparator.comparingInt(q -> recentIds.getOrDefault(q.id, -1)));
+            out.add(variants.get(0));
+        }
+        Collections.shuffle(out, random);
         return out;
+    }
+
+    private boolean assignTag(int slot, List<List<String>> choices,
+            Map<String, Integer> owners, Set<String> visited) {
+        // Prefer a free concept before displacing another slot's preferred one.
+        for (String tag : choices.get(slot)) if (!owners.containsKey(tag)) {
+            owners.put(tag, slot);
+            return true;
+        }
+        for (String tag : choices.get(slot)) {
+            if (!visited.add(tag)) continue;
+            if (assignTag(owners.get(tag), choices, owners, visited)) {
+                owners.put(tag, slot);
+                return true;
+            }
+        }
+        return false;
     }
 
     private void showExam() {
         if (exam == null) return;
+        saveRecentIds();
         stopTimer();
 
         LinearLayout page = new LinearLayout(this);
@@ -544,7 +623,7 @@ public class MainActivity extends Activity {
         TextView score = page.findViewWithTag("score");
         score.setText("Aciertos " + exam.confirmedCorrect() + " · Fallos " + exam.confirmedWrong());
 
-        TextView topic = text(q.topic + " · " + capitalize(q.difficulty), 12, BLUE_DARK, true);
+        TextView topic = text(q.topic, 12, BLUE_DARK, true);
         topic.setPadding(0, 0, 0, dp(10));
         body.addView(topic, matchWrap());
 
@@ -648,7 +727,6 @@ public class MainActivity extends Activity {
         exam.finished = true;
         exam.elapsedSeconds = exam.mock ? Math.min(5400, 5400 - exam.remainingSeconds) : exam.elapsedSeconds;
         saveStats();
-        saveRecentIds();
         showResults(timeExpired);
     }
 
@@ -716,7 +794,7 @@ public class MainActivity extends Activity {
         again.setLayoutParams(alp);
         again.setOnClickListener(v -> {
             if (exam.mock) startMockExam();
-            else startTopicExam(exam.topic, exam.requestedCount, exam.difficulty);
+            else startTopicExam(exam.topic, exam.requestedCount);
         });
         page.addView(again);
 
@@ -840,10 +918,13 @@ public class MainActivity extends Activity {
         scrim.setBackgroundColor(Color.argb(115, 0, 0, 0));
         scrim.setAlpha(0f);
         scrim.setVisibility(View.GONE);
-        scrim.setOnClickListener(v -> closeDrawer());
+        scrim.setTag("drawer_scrim");
+        scrim.setOnClickListener(v -> { closeDrawer(); closeSettings(); });
         root.addView(scrim, match());
 
         drawer = new LinearLayout(this);
+        drawer.setTag("stats_drawer");
+        drawer.setVisibility(View.GONE);
         drawer.setOrientation(LinearLayout.VERTICAL);
         drawer.setBackgroundColor(CARD);
         drawer.setPadding(dp(20), dp(26), dp(20), dp(20));
@@ -924,8 +1005,11 @@ public class MainActivity extends Activity {
 
     private void openDrawer() {
         if (drawer == null || drawerOpen) return;
+        closeSettings();
         refreshDrawer();
         drawerOpen = true;
+        drawer.animate().cancel();
+        drawer.setVisibility(View.VISIBLE);
         scrim.setVisibility(View.VISIBLE);
         scrim.animate().alpha(1f).setDuration(180).start();
         drawer.animate().translationX(0).setDuration(220).start();
@@ -936,8 +1020,8 @@ public class MainActivity extends Activity {
         drawerOpen = false;
         int width = drawer.getWidth() > 0 ? drawer.getWidth() : (int)(getResources().getDisplayMetrics().widthPixels * 0.86f);
         drawer.animate().translationX(-width).setDuration(200).withEndAction(() -> {
-            scrim.setVisibility(View.GONE);
-            scrim.setAlpha(0f);
+            if (!drawerOpen) drawer.setVisibility(View.GONE);
+            hideScrimIfClosed();
         }).start();
     }
 
@@ -1059,17 +1143,12 @@ public class MainActivity extends Activity {
         return m + " min";
     }
 
-    private String capitalize(String s) {
-        if (s == null || s.isEmpty()) return s;
-        return s.substring(0,1).toUpperCase(Locale.ROOT) + s.substring(1);
-    }
-
     private static class Question {
-        final String id, topic, difficulty, question, explanation, tag;
+        final String id, topic, question, explanation, tag;
         final String[] answers;
         final int correct;
-        Question(String id, String topic, String difficulty, String question, String[] answers, int correct, String explanation, String tag) {
-            this.id=id; this.topic=topic; this.difficulty=difficulty; this.question=question;
+        Question(String id, String topic, String question, String[] answers, int correct, String explanation, String tag) {
+            this.id=id; this.topic=topic; this.question=question;
             this.answers=answers; this.correct=correct; this.explanation=explanation; this.tag=tag;
         }
     }
@@ -1078,7 +1157,6 @@ public class MainActivity extends Activity {
         final List<Question> questions;
         final boolean mock;
         final String topic;
-        final String difficulty;
         final int requestedCount;
         final int[] selected;
         final boolean[] confirmed;
@@ -1088,8 +1166,8 @@ public class MainActivity extends Activity {
         long startedAt;
         boolean finished=false;
 
-        Exam(List<Question> questions, boolean mock, String topic, String difficulty, int requestedCount) {
-            this.questions=questions; this.mock=mock; this.topic=topic; this.difficulty=difficulty; this.requestedCount=requestedCount;
+        Exam(List<Question> questions, boolean mock, String topic, int requestedCount) {
+            this.questions=questions; this.mock=mock; this.topic=topic; this.requestedCount=requestedCount;
             selected=new int[questions.size()];
             confirmed=new boolean[questions.size()];
             for(int i=0;i<selected.length;i++) selected[i]=-1;

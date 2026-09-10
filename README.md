@@ -6,7 +6,8 @@ Aplicación Android offline para practicar el examen teórico del Patrón de Emb
 
 - Banco inicial de **1.000 preguntas** integrado en la APK.
 - Tests por los 11 temas del PER.
-- Dificultad fácil, media, difícil o mixta.
+- Selección de todas las preguntas del tema, sin filtro de dificultad.
+- Una pregunta por etiqueta en cada test, incluido el simulacro; se priorizan conceptos y variantes no recientes. Si se supera el máximo de conceptos del tema, se solicita reducir la cantidad.
 - Selección de respuesta + botón **Confirmar**.
 - Respuesta correcta en verde y errónea en rojo tras confirmar.
 - Navegación **Anterior / Confirmar / Siguiente**.
@@ -18,7 +19,7 @@ Aplicación Android offline para practicar el examen teórico del Patrón de Emb
 - Estadísticas locales desglosadas por materia y opción para reiniciarlas.
 - Evita en lo posible repetir las preguntas usadas recientemente.
 - Funciona sin Internet y sin API de pago.
-- Ajustes con interruptor **Modo noche**, aplicado a todas las pantallas y guardado localmente.
+- Ajustes en un panel lateral derecho, accesible mediante el engranaje de la cabecera, con interruptor **Modo noche**, aplicado a todas las pantallas y guardado localmente.
 - Cabecera del test con más espacio superior y controles fuera de las barras del sistema.
 
 ## Distribución del banco
