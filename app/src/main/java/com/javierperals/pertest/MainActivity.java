@@ -8,6 +8,11 @@ import android.graphics.Color;
 import android.graphics.Typeface;
 import android.graphics.drawable.GradientDrawable;
 import android.os.Bundle;
+import android.os.Build;
+import android.content.res.Resources;
+import android.view.WindowInsets;
+import android.view.WindowInsetsController;
+import android.widget.Switch;
 import android.os.Handler;
 import android.os.Looper;
 import android.view.Gravity;
@@ -44,17 +49,23 @@ import java.util.Set;
 public class MainActivity extends Activity {
 
     private static final int BLUE = Color.rgb(21, 101, 192);
-    private static final int BLUE_DARK = Color.rgb(13, 71, 161);
-    private static final int RED = Color.rgb(198, 40, 40);
-    private static final int GREEN = Color.rgb(46, 125, 50);
-    private static final int TEXT = Color.rgb(28, 36, 48);
-    private static final int MUTED = Color.rgb(96, 110, 125);
-    private static final int BG = Color.rgb(245, 247, 250);
-    private static final int CARD = Color.WHITE;
-    private static final int BORDER = Color.rgb(218, 224, 232);
-    private static final int SELECTED = Color.rgb(227, 242, 253);
-    private static final int CORRECT_BG = Color.rgb(232, 245, 233);
-    private static final int WRONG_BG = Color.rgb(255, 235, 238);
+    private int BLUE_DARK = Color.rgb(13, 71, 161);
+    private int RED = Color.rgb(198, 40, 40);
+    private int GREEN = Color.rgb(46, 125, 50);
+    private int TEXT = Color.rgb(28, 36, 48);
+    private int MUTED = Color.rgb(96, 110, 125);
+    private int BG = Color.rgb(245, 247, 250);
+    private int CARD = Color.WHITE;
+    private int BORDER = Color.rgb(218, 224, 232);
+    private int SELECTED = Color.rgb(227, 242, 253);
+    private int CORRECT_BG = Color.rgb(232, 245, 233);
+    private int WRONG_BG = Color.rgb(255, 235, 238);
+
+    private static final int BUTTON_RED = Color.rgb(198, 40, 40);
+    private static final String SETTINGS = "per_settings";
+    private boolean nightMode;
+    private boolean settingsOpen;
+    private SharedPreferences settings;
 
     private static final String PREFS = "per_stats";
     private static final String[] TOPICS = new String[]{
@@ -100,13 +111,121 @@ public class MainActivity extends Activity {
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
+        settings = getSharedPreferences(SETTINGS, MODE_PRIVATE);
+        nightMode = settings.getBoolean("night_mode", false);
+        setTheme(nightMode ? R.style.AppTheme_Night : R.style.AppTheme);
         super.onCreate(savedInstanceState);
-        Window w = getWindow();
-        w.setStatusBarColor(Color.WHITE);
-        w.setNavigationBarColor(Color.WHITE);
+        applyAppearance();
         prefs = getSharedPreferences(PREFS, MODE_PRIVATE);
         loadQuestionBank();
         showHome();
+    }
+
+    private void applyAppearance() {
+        Resources.Theme theme = getResources().newTheme();
+        theme.applyStyle(nightMode ? R.style.AppTheme_Night : R.style.AppTheme, true);
+        getTheme().setTo(theme);
+        BLUE_DARK = nightMode ? Color.rgb(144, 202, 249) : Color.rgb(13, 71, 161);
+        RED = nightMode ? Color.rgb(255, 138, 128) : BUTTON_RED;
+        GREEN = nightMode ? Color.rgb(129, 199, 132) : Color.rgb(46, 125, 50);
+        TEXT = nightMode ? Color.rgb(241, 243, 245) : Color.rgb(28, 36, 48);
+        MUTED = nightMode ? Color.rgb(183, 194, 205) : Color.rgb(96, 110, 125);
+        BG = nightMode ? Color.rgb(18, 20, 24) : Color.rgb(245, 247, 250);
+        CARD = nightMode ? Color.rgb(30, 34, 40) : Color.WHITE;
+        BORDER = nightMode ? Color.rgb(80, 91, 105) : Color.rgb(218, 224, 232);
+        SELECTED = nightMode ? Color.rgb(25, 54, 82) : Color.rgb(227, 242, 253);
+        CORRECT_BG = nightMode ? Color.rgb(24, 53, 35) : Color.rgb(232, 245, 233);
+        WRONG_BG = nightMode ? Color.rgb(65, 30, 34) : Color.rgb(255, 235, 238);
+
+        Window window = getWindow();
+        // Install the decor before asking PhoneWindow for its insets controller.
+        View decor = window.getDecorView();
+        window.setStatusBarColor(CARD);
+        window.setNavigationBarColor(CARD);
+        if (Build.VERSION.SDK_INT >= 30) {
+            window.setDecorFitsSystemWindows(false);
+            WindowInsetsController controller = window.getInsetsController();
+            if (controller != null) {
+                int light = WindowInsetsController.APPEARANCE_LIGHT_STATUS_BARS
+                        | WindowInsetsController.APPEARANCE_LIGHT_NAVIGATION_BARS;
+                controller.setSystemBarsAppearance(nightMode ? 0 : light, light);
+            }
+        } else {
+            int flags = View.SYSTEM_UI_FLAG_LAYOUT_STABLE | View.SYSTEM_UI_FLAG_LAYOUT_FULLSCREEN
+                    | View.SYSTEM_UI_FLAG_LAYOUT_HIDE_NAVIGATION;
+            if (!nightMode) flags |= View.SYSTEM_UI_FLAG_LIGHT_STATUS_BAR | View.SYSTEM_UI_FLAG_LIGHT_NAVIGATION_BAR;
+            decor.setSystemUiVisibility(flags);
+        }
+    }
+
+    @Override
+    public void setContentView(View view) {
+        // Keep every screen outside system bars, including enforced edge-to-edge on API 35.
+        FrameLayout safeArea = new FrameLayout(this);
+        safeArea.setTag("safe_area");
+        safeArea.setBackgroundColor(CARD);
+        safeArea.addView(view, match());
+        safeArea.setOnApplyWindowInsetsListener((v, insets) -> {
+            if (Build.VERSION.SDK_INT >= 30) {
+                android.graphics.Insets bars = insets.getInsets(
+                        WindowInsets.Type.systemBars() | WindowInsets.Type.displayCutout());
+                v.setPadding(bars.left, bars.top, bars.right, bars.bottom);
+                return WindowInsets.CONSUMED;
+            }
+            v.setPadding(insets.getSystemWindowInsetLeft(), insets.getSystemWindowInsetTop(),
+                    insets.getSystemWindowInsetRight(), insets.getSystemWindowInsetBottom());
+            return insets.consumeSystemWindowInsets();
+        });
+        super.setContentView(safeArea);
+        safeArea.requestApplyInsets();
+    }
+
+    private void showSettings() {
+        settingsOpen = true;
+        LinearLayout page = new LinearLayout(this);
+        page.setOrientation(LinearLayout.VERTICAL);
+        page.setBackgroundColor(BG);
+        page.setPadding(dp(20), dp(14), dp(20), dp(24));
+        LinearLayout top = new LinearLayout(this);
+        top.setGravity(Gravity.CENTER_VERTICAL);
+        Button back = plainButton("‹", BLUE_DARK, Color.TRANSPARENT);
+        back.setContentDescription("Volver al inicio");
+        back.setTextSize(36);
+        back.setOnClickListener(v -> showHome());
+        top.addView(back, new LinearLayout.LayoutParams(dp(56), dp(52)));
+        TextView title = text("Ajustes", 23, TEXT, true);
+        title.setGravity(Gravity.CENTER);
+        top.addView(title, new LinearLayout.LayoutParams(0, dp(52), 1));
+        top.addView(new View(this), new LinearLayout.LayoutParams(dp(56), dp(52)));
+        page.addView(top, matchWrap());
+
+        LinearLayout panel = card();
+        panel.setPadding(dp(18), dp(12), dp(18), dp(12));
+        LinearLayout.LayoutParams panelLp = matchWrap();
+        panelLp.topMargin = dp(18);
+        page.addView(panel, panelLp);
+        Switch toggle = new Switch(this);
+        toggle.setTag("night_mode");
+        toggle.setText("Modo noche");
+        toggle.setTextColor(TEXT);
+        toggle.setTextSize(17);
+        toggle.setMinHeight(dp(56));
+        toggle.setSwitchPadding(dp(16));
+        toggle.setChecked(nightMode);
+        toggle.setOnCheckedChangeListener((button, checked) -> {
+            nightMode = checked;
+            settings.edit().putBoolean("night_mode", checked).apply();
+            applyAppearance();
+            showSettings();
+        });
+        panel.addView(toggle, matchWrap());
+        setContentView(page);
+    }
+
+    @Override
+    public void onBackPressed() {
+        if (settingsOpen) showHome();
+        else super.onBackPressed();
     }
 
     @Override
@@ -146,6 +265,7 @@ public class MainActivity extends Activity {
     }
 
     private void showHome() {
+        settingsOpen = false;
         stopTimer();
         exam = null;
         root = new FrameLayout(this);
@@ -160,7 +280,7 @@ public class MainActivity extends Activity {
         LinearLayout top = new LinearLayout(this);
         top.setOrientation(LinearLayout.HORIZONTAL);
         top.setGravity(Gravity.CENTER_VERTICAL);
-        Button menu = plainButton("☰", BLUE, Color.TRANSPARENT);
+        Button menu = plainButton("☰", nightMode ? BLUE_DARK : BLUE, Color.TRANSPARENT);
         menu.setTextSize(28);
         menu.setMinWidth(dp(52));
         menu.setOnClickListener(v -> openDrawer());
@@ -196,7 +316,13 @@ public class MainActivity extends Activity {
         mock.setOnClickListener(v -> startMockExam());
         card.addView(mock);
 
-        Button exit = actionButton("Salir", RED);
+        Button settingsButton = actionButton("Ajustes", BLUE);
+        LinearLayout.LayoutParams settingsLp = buttonLp();
+        settingsLp.topMargin = dp(14);
+        settingsButton.setOnClickListener(v -> showSettings());
+        card.addView(settingsButton, settingsLp);
+
+        Button exit = actionButton("Salir", BUTTON_RED);
         LinearLayout.LayoutParams elp = buttonLp();
         elp.topMargin = dp(14);
         exit.setLayoutParams(elp);
@@ -222,7 +348,7 @@ public class MainActivity extends Activity {
         LinearLayout top = new LinearLayout(this);
         top.setOrientation(LinearLayout.HORIZONTAL);
         top.setGravity(Gravity.CENTER_VERTICAL);
-        Button back = plainButton("‹", BLUE, Color.TRANSPARENT);
+        Button back = plainButton("‹", nightMode ? BLUE_DARK : BLUE, Color.TRANSPARENT);
         back.setTextSize(36);
         back.setOnClickListener(v -> showHome());
         top.addView(back, new LinearLayout.LayoutParams(dp(56), dp(52)));
@@ -321,28 +447,32 @@ public class MainActivity extends Activity {
 
         LinearLayout header = new LinearLayout(this);
         header.setOrientation(LinearLayout.VERTICAL);
-        header.setPadding(dp(18), dp(12), dp(18), dp(10));
-        header.setBackgroundColor(Color.WHITE);
+        header.setTag("exam_header");
+        header.setPadding(dp(20), dp(24), dp(20), dp(14));
+        header.setBackgroundColor(CARD);
 
         LinearLayout row = new LinearLayout(this);
         row.setOrientation(LinearLayout.HORIZONTAL);
         row.setGravity(Gravity.CENTER_VERTICAL);
         Button close = plainButton("×", RED, Color.TRANSPARENT);
         close.setTextSize(30);
+        close.setTag("exit_exam");
+        close.setContentDescription("Salir del test");
         close.setOnClickListener(v -> confirmExitExam());
-        row.addView(close, new LinearLayout.LayoutParams(dp(52), dp(46)));
+        row.addView(close, new LinearLayout.LayoutParams(dp(56), dp(56)));
         TextView title = text(exam.mock ? "Simulacro PER" : exam.topic, 18, TEXT, true);
         title.setGravity(Gravity.CENTER);
-        row.addView(title, new LinearLayout.LayoutParams(0, dp(46), 1));
-        TextView timer = text("00 : 00", 16, BLUE_DARK, true);
-        timer.setGravity(Gravity.CENTER_VERTICAL | Gravity.RIGHT);
+        row.addView(title, new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1));
+        TextView timer = text("00 : 00", 17, BLUE_DARK, true);
+        timer.setGravity(Gravity.CENTER);
         timer.setTag("timer");
-        row.addView(timer, new LinearLayout.LayoutParams(dp(88), dp(46)));
+        row.addView(timer, new LinearLayout.LayoutParams(dp(96), dp(56)));
         header.addView(row, matchWrap());
 
         LinearLayout stats = new LinearLayout(this);
         stats.setOrientation(LinearLayout.HORIZONTAL);
         stats.setGravity(Gravity.CENTER);
+        stats.setPadding(0, dp(6), 0, 0);
         TextView progress = text("Pregunta 1 / " + exam.questions.size(), 13, MUTED, true);
         progress.setTag("progress");
         stats.addView(progress, new LinearLayout.LayoutParams(0, dp(34), 1));
@@ -366,7 +496,7 @@ public class MainActivity extends Activity {
         nav.setOrientation(LinearLayout.HORIZONTAL);
         nav.setPadding(dp(12), dp(10), dp(12), dp(12));
         nav.setGravity(Gravity.CENTER);
-        nav.setBackgroundColor(Color.WHITE);
+        nav.setBackgroundColor(CARD);
 
         Button previous = actionButton("Anterior", BLUE);
         previous.setTag("previous");
@@ -590,7 +720,7 @@ public class MainActivity extends Activity {
         });
         page.addView(again);
 
-        Button home = actionButton("Inicio", BLUE_DARK);
+        Button home = actionButton("Inicio", nightMode ? BLUE : BLUE_DARK);
         LinearLayout.LayoutParams hlp = buttonLp();
         hlp.topMargin = dp(12);
         home.setLayoutParams(hlp);
@@ -715,7 +845,7 @@ public class MainActivity extends Activity {
 
         drawer = new LinearLayout(this);
         drawer.setOrientation(LinearLayout.VERTICAL);
-        drawer.setBackgroundColor(Color.WHITE);
+        drawer.setBackgroundColor(CARD);
         drawer.setPadding(dp(20), dp(26), dp(20), dp(20));
         int width = (int)(getResources().getDisplayMetrics().widthPixels * 0.86f);
         FrameLayout.LayoutParams dlp = new FrameLayout.LayoutParams(width, ViewGroup.LayoutParams.MATCH_PARENT, Gravity.LEFT);
@@ -773,13 +903,13 @@ public class MainActivity extends Activity {
             float tp = tq == 0 ? 0f : 100f * tok / tq;
             TextView line = text(t + "\n" + (tq == 0 ? "Sin datos" : tok + "/" + tq + " · " + String.format(Locale.US, "%.1f%%", tp)), 14, TEXT, false);
             line.setPadding(dp(10), dp(9), dp(10), dp(9));
-            line.setBackground(roundRect(Color.rgb(248,249,251), BORDER, 1, 9));
+            line.setBackground(roundRect(nightMode ? BG : Color.rgb(248,249,251), BORDER, 1, 9));
             LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
             lp.bottomMargin = dp(7);
             stats.addView(line, lp);
         }
 
-        Button reset = actionButton("Reiniciar", RED);
+        Button reset = actionButton("Reiniciar", BUTTON_RED);
         reset.setOnClickListener(v -> new AlertDialog.Builder(this)
                 .setTitle("Reiniciar estadísticas")
                 .setMessage("Se borrarán las estadísticas acumuladas. El banco de preguntas no se modifica.")
@@ -838,7 +968,7 @@ public class MainActivity extends Activity {
         Spinner s = new Spinner(this);
         ArrayAdapter<String> adapter = new ArrayAdapter<>(this, android.R.layout.simple_spinner_dropdown_item, data);
         s.setAdapter(adapter);
-        s.setBackground(roundRect(Color.WHITE, BORDER, 1, 10));
+        s.setBackground(roundRect(CARD, BORDER, 1, 10));
         s.setPadding(dp(10), 0, dp(8), 0);
         return s;
     }

@@ -18,6 +18,8 @@ Aplicación Android offline para practicar el examen teórico del Patrón de Emb
 - Estadísticas locales desglosadas por materia y opción para reiniciarlas.
 - Evita en lo posible repetir las preguntas usadas recientemente.
 - Funciona sin Internet y sin API de pago.
+- Ajustes con interruptor **Modo noche**, aplicado a todas las pantallas y guardado localmente.
+- Cabecera del test con más espacio superior y controles fuera de las barras del sistema.
 
 ## Distribución del banco
 
@@ -56,7 +58,8 @@ del workflow **Compilar APK Test PER**.
 
 Las pruebas de regresión ejecutan la actividad en Android 8 (API 26) y Android 15
 (API 35): creación del test, disposición de las vistas, navegación, confirmación,
-finalización, nuevo test y simulacro.
+finalización, nuevo test y simulacro. También verifican los modos día/noche,
+su persistencia y el espacio reservado para las barras del sistema.
 
 Es una APK **debug firmada automáticamente por Android**, válida para instalar manualmente en un dispositivo Android.
 
