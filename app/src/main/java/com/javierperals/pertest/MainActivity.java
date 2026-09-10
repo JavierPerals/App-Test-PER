@@ -734,7 +734,7 @@ public class MainActivity extends Activity {
         int correct = exam.finalCorrect();
         int wrong = exam.questions.size() - correct;
         int unanswered = exam.unconfirmedCount();
-        double grade = 10.0 * correct / exam.questions.size();
+        TestResult result = new TestResult(correct, exam.questions.size());
         boolean pass = exam.mock && passesOfficialCriteria();
 
         ScrollView scroll = new ScrollView(this);
@@ -755,10 +755,7 @@ public class MainActivity extends Activity {
             page.addView(status, matchWrap());
         }
 
-        TextView score = text(String.format(Locale.US, "%.1f / 10", grade), 36, BLUE_DARK, true);
-        score.setGravity(Gravity.CENTER);
-        score.setPadding(0, dp(8), 0, dp(16));
-        page.addView(score, matchWrap());
+        page.addView(new ResultScoreView(this, result, BLUE_DARK), matchWrap());
 
         LinearLayout summary = card();
         summary.setPadding(dp(16), dp(16), dp(16), dp(16));

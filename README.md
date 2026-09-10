@@ -41,6 +41,30 @@ Aplicación Android offline para practicar el examen teórico del Patrón de Emb
 
 ## APK
 
+### Animaciones de resultados
+
+Todas las modalidades actuales comparten `showResults()`. Su cabecera usa
+`ResultScoreView(context, new TestResult(aciertos, total), color)`; un futuro modo
+puede reutilizarla con sus datos sin repetir el cálculo ni los umbrales.
+`TestResult` calcula `(aciertos / total) * 100` con decimales: menos de 50 usa
+`result_sad.webp`, desde 50 hasta menos de 80 usa `result_good.webp`, y desde 80
+usa `result_celebration.webp`. No se redondea antes de seleccionar el archivo.
+
+Los tres archivos están en `app/src/main/assets/`. Se pueden sustituir manteniendo
+exactamente sus nombres y recompilando. Se incluyen animaciones geométricas
+originales de ejemplo; el generador opcional está en `tools/generate_result_animations.py`
+(Pillow, no necesario para compilar Android).
+
+El reproductor usa el WebView del sistema, compatible con WebP animado también
+en Android 8, sin librerías adicionales ni JavaScript ni acceso a red. Conserva
+la proporción con `object-fit: contain`, fuerza la repetición en memoria y libera
+el reproductor al salir. La nota conserva su estilo y la imagen ocupa hasta 88 dp;
+la cabecera pasa a vertical si falta espacio, incluido el texto ampliado.
+
+Pruebas: límites 0/49/50/79/80/100, porcentajes fraccionarios, varias longitudes,
+resultados por temas y simulacro (incluido tiempo agotado), tamaños de cabecera,
+reproducción/pausa y conservación de estadísticas.
+
 El proyecto Android está en la raíz del repositorio (`app/`, `build.gradle` y
 `settings.gradle`), como archivos normales. El workflow no descomprime ningún ZIP.
 

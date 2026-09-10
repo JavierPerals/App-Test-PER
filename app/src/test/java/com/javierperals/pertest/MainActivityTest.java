@@ -286,6 +286,41 @@ public class MainActivityTest {
         }
     }
 
+    @Test public void sharedResultsWorkForTopicMockAndTimeoutWithoutChangingStats() {
+        for (boolean mock : new boolean[]{false, true}) {
+            for (int percentage : new int[]{0, 50, 80, 100}) {
+                try (ActivityController<MainActivity> controller = Robolectric.buildActivity(MainActivity.class).setup()) {
+                    MainActivity activity = controller.get();
+                    ViewGroup content = activity.findViewById(android.R.id.content);
+                    if (mock) clickText(content, "Simulacro PER");
+                    else {
+                        clickText(content, "Tests por temas");
+                        clickText(content, "Generar test");
+                    }
+                    Object exam = ReflectionHelpers.getField(activity, "exam");
+                    List<?> questions = ReflectionHelpers.getField(exam, "questions");
+                    int correct = questions.size() * percentage / 100;
+                    int[] selected = ReflectionHelpers.getField(exam, "selected");
+                    boolean[] confirmed = ReflectionHelpers.getField(exam, "confirmed");
+                    for (int i = 0; i < correct; i++) {
+                        selected[i] = ReflectionHelpers.getField(questions.get(i), "correct");
+                        confirmed[i] = true;
+                    }
+                    SharedPreferences stats = activity.getSharedPreferences("per_stats", 0);
+                    int previousCorrect = stats.getInt("correct", 0);
+                    ReflectionHelpers.callInstanceMethod(activity, "finishExam", ClassParameter.from(boolean.class, mock));
+                    assertNotNull(content.findViewWithTag("result_animation"));
+                    assertEquals(String.format(java.util.Locale.US, "%.1f / 10", 10.0 * correct / questions.size()),
+                            taggedText(content, "result_grade"));
+                    assertEquals(previousCorrect + correct, stats.getInt("correct", 0));
+                    assertNotNull(findText(content, "Generar nuevo test"));
+                    clickText(content, "Inicio");
+                    assertNotNull(findText(content, "Tests por temas"));
+                }
+            }
+        }
+    }
+
     private static void idleAnimations() {
         Shadows.shadowOf(Looper.getMainLooper()).idleFor(1, TimeUnit.SECONDS);
     }
