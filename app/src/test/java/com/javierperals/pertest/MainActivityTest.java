@@ -181,7 +181,7 @@ public class MainActivityTest {
                 allIds.add(field(q, "id"));
             }
             assertEquals(1000, bank.size());
-            assertEquals(24, tagsByTopic.get("Elementos de amarre y fondeo").size());
+            assertTrue(tagsByTopic.get("Elementos de amarre y fondeo").size() >= 24);
             SharedPreferences prefs = activity.getSharedPreferences("per_stats", 0);
             for (boolean saturated : new boolean[]{false, true}) {
                 prefs.edit().putString("recent", saturated ? String.join(",", allIds) : "").commit();
@@ -225,6 +225,16 @@ public class MainActivityTest {
 
     @Test public void excessiveCountStaysInSetupAndRegenerationKeepsTopicAndCount() {
         try (ActivityController<MainActivity> controller = Robolectric.buildActivity(MainActivity.class).setup()) {
+            // Use a deliberately limited bank to exercise the insufficient-concepts warning.
+            // The production bank may grow to more concepts than the largest UI request.
+            List<Object> bank = ReflectionHelpers.getField(controller.get(), "bank");
+            Set<String> allowedTags = new HashSet<>();
+            for (Object q : bank) {
+                if (field(q, "topic").equals("Elementos de amarre y fondeo") && allowedTags.size() < 24)
+                    allowedTags.add(field(q, "tag"));
+            }
+            bank.removeIf(q -> field(q, "topic").equals("Elementos de amarre y fondeo")
+                    && !allowedTags.contains(field(q, "tag")));
             ViewGroup content = controller.get().findViewById(android.R.id.content);
             clickText(content, "Tests por temas");
             List<Spinner> spinners = new ArrayList<>();
