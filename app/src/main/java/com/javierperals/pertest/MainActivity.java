@@ -15,6 +15,7 @@ import android.view.WindowInsetsController;
 import android.widget.Switch;
 import android.os.Handler;
 import android.os.Looper;
+import android.os.SystemClock;
 import android.view.Gravity;
 import android.view.View;
 import android.view.ViewGroup;
@@ -109,6 +110,10 @@ public class MainActivity extends Activity {
 
     private Exam exam;
     private Runnable timerRunnable;
+    private AlertDialog exitDialog;
+    private boolean timeTrialSetupVisible;
+    private final Set<String> timeTrialTopics = new LinkedHashSet<>();
+    private int timeTrialMinutes = 3;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -264,12 +269,15 @@ public class MainActivity extends Activity {
     public void onBackPressed() {
         if (settingsOpen) closeSettings();
         else if (drawerOpen) closeDrawer();
+        else if (exam != null && !exam.finished) confirmExitExam();
+        else if (timeTrialSetupVisible || (exam != null && exam.finished)) showHome();
         else super.onBackPressed();
     }
 
     @Override
     protected void onDestroy() {
         stopTimer();
+        if (exitDialog != null) exitDialog.dismiss();
         super.onDestroy();
     }
 
@@ -303,6 +311,7 @@ public class MainActivity extends Activity {
     }
 
     private void showHome() {
+        timeTrialSetupVisible = false;
         settingsOpen = false;
         drawerOpen = false;
         stopTimer();
@@ -360,6 +369,16 @@ public class MainActivity extends Activity {
         mock.setLayoutParams(mlp);
         mock.setOnClickListener(v -> startMockExam());
         card.addView(mock);
+
+        Button timed = actionButton("Contrarreloj", BLUE);
+        LinearLayout.LayoutParams tlp = buttonLp();
+        tlp.topMargin = dp(14);
+        card.addView(timed, tlp);
+        timed.setOnClickListener(v -> {
+            timeTrialTopics.clear();
+            timeTrialMinutes = 3;
+            showTimeTrialSetup();
+        });
 
         Button exit = actionButton("Salir", BUTTON_RED);
         LinearLayout.LayoutParams elp = buttonLp();
@@ -424,6 +443,118 @@ public class MainActivity extends Activity {
         });
         form.addView(generate);
         setContentView(page);
+    }
+
+    private void showTimeTrialSetup() {
+        stopTimer();
+        exam = null;
+        timeTrialSetupVisible = true;
+        ScrollView scroll = new ScrollView(this);
+        scroll.setBackgroundColor(BG);
+        LinearLayout page = new LinearLayout(this);
+        page.setOrientation(LinearLayout.VERTICAL);
+        page.setPadding(dp(20), dp(14), dp(20), dp(24));
+        scroll.addView(page, matchWrap());
+        Button back = plainButton("‹  Contrarreloj", BLUE_DARK, Color.TRANSPARENT);
+        back.setContentDescription("Volver al inicio");
+        back.setOnClickListener(v -> showHome());
+        page.addView(back, buttonLp());
+        LinearLayout form = card();
+        form.setPadding(dp(18), dp(20), dp(18), dp(20));
+        page.addView(form, matchWrap());
+        form.addView(fieldLabel("Temas"));
+        WrapLayout chips = new WrapLayout(this);
+        chips.setTag("trial_topics");
+        for (String topic : timeTrialTopics) {
+            Button chip = choiceButton(topic + "  ×", true);
+            chip.setTag("remove_topic_" + topic);
+            chip.setContentDescription("Quitar " + topic);
+            chip.setOnClickListener(v -> { timeTrialTopics.remove(topic); showTimeTrialSetup(); });
+            chips.addView(chip);
+        }
+        Button add = choiceButton("+", false);
+        add.setTag("add_topics");
+        add.setContentDescription("Añadir o modificar temas");
+        add.setOnClickListener(v -> showTimeTrialTopics());
+        chips.addView(add);
+        form.addView(chips, matchWrap());
+        form.addView(fieldLabel("Tiempo"));
+        WrapLayout times = new WrapLayout(this);
+        for (int minutes : new int[]{1, 3, 5, 10}) {
+            Button option = choiceButton(minutes + " min", minutes == timeTrialMinutes);
+            option.setTag("minutes_" + minutes);
+            option.setOnClickListener(v -> { timeTrialMinutes = minutes; showTimeTrialSetup(); });
+            times.addView(option);
+        }
+        form.addView(times, matchWrap());
+        Button generate = actionButton("GENERAR", BLUE);
+        generate.setTag("generate_trial");
+        generate.setOnClickListener(v -> startTimeTrial(timeTrialTopics, timeTrialMinutes));
+        LinearLayout.LayoutParams lp = buttonLp();
+        lp.topMargin = dp(22);
+        form.addView(generate, lp);
+        setContentView(scroll);
+    }
+
+    private Button choiceButton(String label, boolean active) {
+        Button button = plainButton(label, active ? BLUE_DARK : TEXT, CARD);
+        button.setTextSize(15);
+        button.setPadding(dp(12), dp(8), dp(12), dp(8));
+        button.setMinHeight(dp(48));
+        button.setSelected(active);
+        button.setBackground(roundRect(active ? SELECTED : CARD, active ? BLUE_DARK : BORDER, 1, 10));
+        return button;
+    }
+
+    private void showTimeTrialTopics() {
+        String[] labels = new String[TOPICS.length + 1];
+        labels[0] = "Seleccionar todo";
+        System.arraycopy(TOPICS, 0, labels, 1, TOPICS.length);
+        boolean[] checked = new boolean[labels.length];
+        for (int i = 0; i < TOPICS.length; i++) checked[i + 1] = timeTrialTopics.contains(TOPICS[i]);
+        checked[0] = timeTrialTopics.size() == TOPICS.length;
+        new AlertDialog.Builder(this).setTitle("Seleccionar temas")
+                .setMultiChoiceItems(labels, checked, (dialog, which, value) -> {
+                    android.widget.ListView list = ((AlertDialog) dialog).getListView();
+                    checked[which] = value;
+                    if (which == 0) {
+                        for (int i = 1; i < checked.length; i++) {
+                            checked[i] = value; list.setItemChecked(i, value);
+                        }
+                    } else {
+                        boolean all = true;
+                        for (int i = 1; i < checked.length; i++) all &= checked[i];
+                        checked[0] = all; list.setItemChecked(0, all);
+                    }
+                })
+                .setNegativeButton("Cancelar", null)
+                .setPositiveButton("Aceptar", (dialog, which) -> {
+                    timeTrialTopics.clear();
+                    for (int i = 0; i < TOPICS.length; i++) if (checked[i + 1]) timeTrialTopics.add(TOPICS[i]);
+                    showTimeTrialSetup();
+                }).show();
+    }
+
+    private void startTimeTrial(Set<String> topics, int minutes) {
+        if (topics.isEmpty() || (minutes != 1 && minutes != 3 && minutes != 5 && minutes != 10)) {
+            Toast.makeText(this, "Selecciona al menos un tema y una duración.", Toast.LENGTH_SHORT).show();
+            return;
+        }
+        List<Question> pool = new ArrayList<>();
+        for (Question q : bank) if (topics.contains(q.topic)) pool.add(q);
+        if (pool.isEmpty()) {
+            Toast.makeText(this, "No hay preguntas para los temas seleccionados.", Toast.LENGTH_SHORT).show();
+            return;
+        }
+        stopTimer();
+        exam = new Exam(new ArrayList<>(), false, "Contrarreloj", 0);
+        exam.timeTrial = true;
+        exam.selectedTopics.addAll(topics);
+        exam.durationSeconds = minutes * 60;
+        exam.remainingSeconds = exam.durationSeconds;
+        exam.cycle = new QuestionCycle<>(pool, random);
+        exam.appendQuestion(exam.cycle.next());
+        showExam();
     }
 
     private void startTopicExam(String topic, int n) {
@@ -517,12 +648,14 @@ public class MainActivity extends Activity {
 
     private void showExam() {
         if (exam == null) return;
+        timeTrialSetupVisible = false;
         saveRecentIds();
         stopTimer();
 
         LinearLayout page = new LinearLayout(this);
         page.setOrientation(LinearLayout.VERTICAL);
         page.setBackgroundColor(BG);
+        page.setTag(exam);
 
         LinearLayout header = new LinearLayout(this);
         header.setOrientation(LinearLayout.VERTICAL);
@@ -580,6 +713,7 @@ public class MainActivity extends Activity {
         Button previous = actionButton("Anterior", BLUE);
         previous.setTag("previous");
         previous.setOnClickListener(v -> {
+            if (!canInteract(page)) return;
             if (exam.index > 0) {
                 exam.index--;
                 renderQuestion(page);
@@ -597,6 +731,15 @@ public class MainActivity extends Activity {
         Button next = actionButton("Siguiente", BLUE);
         next.setTag("next");
         next.setOnClickListener(v -> {
+            if (!canInteract(page)) return;
+            if (exam.timeTrial && exam.index == exam.questions.size() - 1) {
+                if (!exam.confirmed[exam.index]) return;
+                exam.appendQuestion(exam.cycle.next());
+                saveRecentIds();
+                exam.index++;
+                renderQuestion(page);
+                return;
+            }
             if (exam.index == exam.questions.size() - 1) {
                 requestFinishExam();
             } else {
@@ -619,7 +762,7 @@ public class MainActivity extends Activity {
         Question q = exam.questions.get(exam.index);
 
         TextView progress = page.findViewWithTag("progress");
-        progress.setText("Pregunta " + (exam.index + 1) + " / " + exam.questions.size());
+        progress.setText("Pregunta " + (exam.index + 1) + (exam.timeTrial ? "" : " / " + exam.questions.size()));
         TextView score = page.findViewWithTag("score");
         score.setText("Aciertos " + exam.confirmedCorrect() + " · Fallos " + exam.confirmedWrong());
 
@@ -659,6 +802,7 @@ public class MainActivity extends Activity {
             answer.setBackground(roundRect(fill, border, 1, 12));
             if (!isConfirmed) {
                 answer.setOnClickListener(v -> {
+                    if (!canInteract(page)) return;
                     exam.selected[exam.index] = answerIndex;
                     renderQuestion(page);
                 });
@@ -697,10 +841,13 @@ public class MainActivity extends Activity {
         confirm.setEnabled(!isConfirmed && selected >= 0);
         confirm.setAlpha((!isConfirmed && selected >= 0) ? 1f : 0.45f);
         Button next = page.findViewWithTag("next");
-        next.setText(exam.index == exam.questions.size() - 1 ? "Terminar" : "Siguiente");
+        next.setText(!exam.timeTrial && exam.index == exam.questions.size() - 1 ? "Terminar" : "Siguiente");
+        next.setEnabled(!exam.timeTrial || isConfirmed);
+        next.setAlpha(next.isEnabled() ? 1f : 0.45f);
     }
 
     private void confirmCurrent(LinearLayout page) {
+        if (!canInteract(page)) return;
         int i = exam.index;
         if (exam.confirmed[i] || exam.selected[i] < 0) return;
         exam.confirmed[i] = true;
@@ -723,8 +870,10 @@ public class MainActivity extends Activity {
 
     private void finishExam(boolean timeExpired) {
         stopTimer();
-        if (exam.finished) return;
+        if (exam == null || exam.finished) return;
         exam.finished = true;
+        if (exitDialog != null) { exitDialog.dismiss(); exitDialog = null; }
+        if (exam.timeTrial) exam.elapsedSeconds = exam.durationSeconds - exam.remainingSeconds;
         exam.elapsedSeconds = exam.mock ? Math.min(5400, 5400 - exam.remainingSeconds) : exam.elapsedSeconds;
         saveStats();
         showResults(timeExpired);
@@ -732,9 +881,9 @@ public class MainActivity extends Activity {
 
     private void showResults(boolean timeExpired) {
         int correct = exam.finalCorrect();
-        int wrong = exam.questions.size() - correct;
-        int unanswered = exam.unconfirmedCount();
-        TestResult result = new TestResult(correct, exam.questions.size());
+        int wrong = exam.resultCount() - correct;
+        int unanswered = exam.timeTrial ? 0 : exam.unconfirmedCount();
+        TestResult result = new TestResult(correct, exam.resultCount());
         boolean pass = exam.mock && passesOfficialCriteria();
 
         ScrollView scroll = new ScrollView(this);
@@ -759,9 +908,16 @@ public class MainActivity extends Activity {
 
         LinearLayout summary = card();
         summary.setPadding(dp(16), dp(16), dp(16), dp(16));
+        if (exam.timeTrial) {
+            summary.addView(statLine("Preguntas respondidas", String.valueOf(exam.resultCount()), BLUE_DARK));
+            summary.addView(statLine("Porcentaje de acierto", String.format(Locale.US, "%.1f%%", result.percentage()), BLUE_DARK));
+            summary.addView(statLine("Tiempo configurado", formatTime(exam.durationSeconds), BLUE_DARK));
+            summary.addView(statLine("Respuestas por minuto", String.format(Locale.US, "%.1f",
+                    exam.elapsedSeconds == 0 ? 0.0 : exam.resultCount() * 60.0 / exam.elapsedSeconds), BLUE_DARK));
+        }
         summary.addView(statLine("Aciertos", String.valueOf(correct), GREEN));
         summary.addView(statLine("Fallos", String.valueOf(wrong), RED));
-        summary.addView(statLine("Sin confirmar", String.valueOf(unanswered), MUTED));
+        if (!exam.timeTrial) summary.addView(statLine("Sin confirmar", String.valueOf(unanswered), MUTED));
         summary.addView(statLine("Tiempo", formatTime(exam.elapsedSeconds), BLUE_DARK));
         page.addView(summary, matchWrap());
 
@@ -790,7 +946,8 @@ public class MainActivity extends Activity {
         alp.topMargin = dp(26);
         again.setLayoutParams(alp);
         again.setOnClickListener(v -> {
-            if (exam.mock) startMockExam();
+            if (exam.timeTrial) startTimeTrial(exam.selectedTopics, exam.durationSeconds / 60);
+            else if (exam.mock) startMockExam();
             else startTopicExam(exam.topic, exam.requestedCount);
         });
         page.addView(again);
@@ -815,6 +972,26 @@ public class MainActivity extends Activity {
     }
 
     private void startTimer(LinearLayout page) {
+        if (exam.timeTrial) {
+            Exam running = exam;
+            running.startedAt = SystemClock.elapsedRealtime();
+            running.deadline = running.startedAt + running.durationSeconds * 1000L;
+            TextView timer = page.findViewWithTag("timer");
+            timer.setText(formatTime(running.durationSeconds));
+            timerRunnable = new Runnable() {
+                @Override public void run() {
+                    if (exam != running || running.finished) return;
+                    long remaining = Math.max(0, running.deadline - SystemClock.elapsedRealtime());
+                    running.remainingSeconds = (int) ((remaining + 999) / 1000);
+                    running.elapsedSeconds = running.durationSeconds - running.remainingSeconds;
+                    timer.setText(formatTime(running.remainingSeconds));
+                    if (remaining == 0) { finishExam(true); return; }
+                    handler.postDelayed(this, Math.min(1000, remaining));
+                }
+            };
+            handler.postDelayed(timerRunnable, 1000);
+            return;
+        }
         exam.startedAt = System.currentTimeMillis();
         if (exam.mock && exam.remainingSeconds <= 0) exam.remainingSeconds = 5400;
         timerRunnable = new Runnable() {
@@ -846,24 +1023,39 @@ public class MainActivity extends Activity {
         timerRunnable = null;
     }
 
+    private boolean canInteract(LinearLayout page) {
+        if (exam == null || exam.finished || page.getTag() != exam) return false;
+        // Check the deadline on input too: the main thread may deliver a tap before a delayed tick.
+        if (exam.timeTrial && SystemClock.elapsedRealtime() >= exam.deadline) {
+            exam.remainingSeconds = 0;
+            TextView timer = page.findViewWithTag("timer");
+            if (timer != null) timer.setText(formatTime(0));
+            finishExam(true);
+            return false;
+        }
+        return true;
+    }
+
     private void confirmExitExam() {
-        new AlertDialog.Builder(this)
+        if (exam == null || exam.finished || (exitDialog != null && exitDialog.isShowing())) return;
+        Exam exiting = exam;
+        exitDialog = new AlertDialog.Builder(this)
                 .setTitle("Salir del test")
                 .setMessage("El progreso de este test no se guardará en estadísticas.")
                 .setNegativeButton("Cancelar", null)
-                .setPositiveButton("Salir", (d, w) -> showHome())
+                .setPositiveButton("Salir", (d, w) -> { if (exam == exiting && !exiting.finished) showHome(); })
                 .show();
     }
 
     private void saveStats() {
         SharedPreferences.Editor ed = prefs.edit();
         int tests = prefs.getInt("tests", 0) + 1;
-        int totalQ = prefs.getInt("questions", 0) + exam.questions.size();
+        int totalQ = prefs.getInt("questions", 0) + exam.resultCount();
         int correct = prefs.getInt("correct", 0) + exam.finalCorrect();
-        int wrong = prefs.getInt("wrong", 0) + (exam.questions.size() - exam.finalCorrect());
-        int unanswered = prefs.getInt("unanswered", 0) + exam.unconfirmedCount();
+        int wrong = prefs.getInt("wrong", 0) + (exam.resultCount() - exam.finalCorrect());
+        int unanswered = prefs.getInt("unanswered", 0) + (exam.timeTrial ? 0 : exam.unconfirmedCount());
         long seconds = prefs.getLong("seconds", 0) + exam.elapsedSeconds;
-        float grade = (float)(10.0 * exam.finalCorrect() / exam.questions.size());
+        float grade = (float) new TestResult(exam.finalCorrect(), exam.resultCount()).grade();
         float scoreSum = prefs.getFloat("scoreSum", 0f) + grade;
         float best = Math.max(prefs.getFloat("best", 0f), grade);
         ed.putInt("tests", tests);
@@ -878,12 +1070,19 @@ public class MainActivity extends Activity {
             ed.putInt("mocks", prefs.getInt("mocks", 0) + 1);
             if (passesOfficialCriteria()) ed.putInt("mocksPassed", prefs.getInt("mocksPassed", 0) + 1);
         }
+        Map<String, Integer> trialCounts = new HashMap<>();
+        Map<String, Integer> trialCorrect = new HashMap<>();
         for (int i = 0; i < exam.questions.size(); i++) {
+            if (exam.timeTrial && !exam.confirmed[i]) continue;
             Question q = exam.questions.get(i);
             String key = keyForTopic(q.topic);
-            ed.putInt("topic_" + key + "_q", prefs.getInt("topic_" + key + "_q", 0) + 1);
+            int count = exam.timeTrial ? trialCounts.merge(key, 1, Integer::sum) : 1;
+            ed.putInt("topic_" + key + "_q", prefs.getInt("topic_" + key + "_q", 0) + count);
             boolean ok = exam.confirmed[i] && exam.selected[i] == q.correct;
-            if (ok) ed.putInt("topic_" + key + "_ok", prefs.getInt("topic_" + key + "_ok", 0) + 1);
+            if (ok) {
+                int okCount = exam.timeTrial ? trialCorrect.merge(key, 1, Integer::sum) : 1;
+                ed.putInt("topic_" + key + "_ok", prefs.getInt("topic_" + key + "_ok", 0) + okCount);
+            }
         }
         ed.apply();
     }
@@ -1155,8 +1354,13 @@ public class MainActivity extends Activity {
         final boolean mock;
         final String topic;
         final int requestedCount;
-        final int[] selected;
-        final boolean[] confirmed;
+        int[] selected;
+        boolean[] confirmed;
+        boolean timeTrial;
+        final Set<String> selectedTopics = new LinkedHashSet<>();
+        int durationSeconds;
+        long deadline;
+        QuestionCycle<Question> cycle;
         int index=0;
         int elapsedSeconds=0;
         int remainingSeconds=5400;
@@ -1168,6 +1372,17 @@ public class MainActivity extends Activity {
             selected=new int[questions.size()];
             confirmed=new boolean[questions.size()];
             for(int i=0;i<selected.length;i++) selected[i]=-1;
+        }
+
+        void appendQuestion(Question question) {
+            questions.add(question);
+            selected = java.util.Arrays.copyOf(selected, questions.size());
+            confirmed = java.util.Arrays.copyOf(confirmed, questions.size());
+            selected[selected.length - 1] = -1;
+        }
+
+        int resultCount() {
+            return timeTrial ? confirmedCorrect() + confirmedWrong() : questions.size();
         }
 
         int confirmedCorrect() {
@@ -1187,6 +1402,7 @@ public class MainActivity extends Activity {
         Map<String,Integer> wrongByTopic() {
             LinkedHashMap<String,Integer> map=new LinkedHashMap<>();
             for(int i=0;i<questions.size();i++) {
+                if(timeTrial && !confirmed[i]) continue;
                 boolean ok=confirmed[i] && selected[i]==questions.get(i).correct;
                 if(!ok) map.put(questions.get(i).topic, map.getOrDefault(questions.get(i).topic,0)+1);
             }
