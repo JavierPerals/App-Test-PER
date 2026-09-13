@@ -397,25 +397,29 @@ public class MainActivity extends Activity {
         createSettingsDrawer();
     }
 
+    private LinearLayout setupHeader(String label) {
+        LinearLayout top = new LinearLayout(this);
+        top.setOrientation(LinearLayout.HORIZONTAL);
+        top.setGravity(Gravity.CENTER_VERTICAL);
+        Button back = plainButton("‹", nightMode ? BLUE_DARK : BLUE, Color.TRANSPARENT);
+        back.setTextSize(36);
+        back.setContentDescription("Volver al inicio");
+        back.setOnClickListener(v -> showHome());
+        top.addView(back, new LinearLayout.LayoutParams(dp(56), dp(52)));
+        TextView title = text(label, 23, TEXT, true);
+        title.setGravity(Gravity.CENTER);
+        top.addView(title, new LinearLayout.LayoutParams(0, dp(52), 1));
+        top.addView(new View(this), new LinearLayout.LayoutParams(dp(56), dp(52)));
+        return top;
+    }
+
     private void showTopicSetup() {
         stopTimer();
         LinearLayout page = new LinearLayout(this);
         page.setOrientation(LinearLayout.VERTICAL);
         page.setBackgroundColor(BG);
         page.setPadding(dp(20), dp(14), dp(20), dp(24));
-
-        LinearLayout top = new LinearLayout(this);
-        top.setOrientation(LinearLayout.HORIZONTAL);
-        top.setGravity(Gravity.CENTER_VERTICAL);
-        Button back = plainButton("‹", nightMode ? BLUE_DARK : BLUE, Color.TRANSPARENT);
-        back.setTextSize(36);
-        back.setOnClickListener(v -> showHome());
-        top.addView(back, new LinearLayout.LayoutParams(dp(56), dp(52)));
-        TextView title = text("Generar test", 23, TEXT, true);
-        title.setGravity(Gravity.CENTER);
-        top.addView(title, new LinearLayout.LayoutParams(0, dp(52), 1));
-        top.addView(new View(this), new LinearLayout.LayoutParams(dp(56), dp(52)));
-        page.addView(top, matchWrap());
+        page.addView(setupHeader("Generar test"), matchWrap());
 
         LinearLayout form = card();
         form.setPadding(dp(18), dp(20), dp(18), dp(20));
@@ -455,10 +459,7 @@ public class MainActivity extends Activity {
         page.setOrientation(LinearLayout.VERTICAL);
         page.setPadding(dp(20), dp(14), dp(20), dp(24));
         scroll.addView(page, matchWrap());
-        Button back = plainButton("‹  Contrarreloj", BLUE_DARK, Color.TRANSPARENT);
-        back.setContentDescription("Volver al inicio");
-        back.setOnClickListener(v -> showHome());
-        page.addView(back, buttonLp());
+        page.addView(setupHeader("Contrarreloj"), matchWrap());
         LinearLayout form = card();
         form.setPadding(dp(18), dp(20), dp(18), dp(20));
         page.addView(form, matchWrap());
